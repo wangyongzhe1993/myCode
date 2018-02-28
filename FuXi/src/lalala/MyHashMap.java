@@ -7,6 +7,7 @@ import java.util.HashMap;
  * 实现目的：最高效率
  * ArrayList随机访问效率高，删除，添加效率低
  * 链表随机访问效率低，删除添加效率高
+ * 非线程安全，遍历顺序不确定
  * 基础概念：
  * size：    map中元实际素个数
  * modCount：map元素被修改的次数
@@ -28,6 +29,13 @@ import java.util.HashMap;
  *                  3）如果链表长度大于1，进入死循环，用key遍历查找是否存在相同的node（key == k || (key != null && key.equals(k))），
  *                     相同则替换，没有则在链表尾部添加，同时检查链表长度，是否treeifyBin
  *              4.检查元素个数，判断扩容
+ * get(key)
+ * remove(key)
+ * resize()
+ *              1.初始化
+ *              2.已初始化就扩容，重新计算容量和新的扩容阈值，容量为原来的2倍，阈值为新的容量*负载因子
+ *                  遍历table，重新计算hash值，将每个链表分为两部分，一部分hash值没变，留在原index，hash变的，移动到（index + oldCapacity）
+ *                  hash不变判断技巧：hash & oldCapacity == 0
  * Created by wyz on 2018/2/24.
  */
 public class MyHashMap {
@@ -35,11 +43,10 @@ public class MyHashMap {
         HashMap hashMap = new HashMap();
         hashMap.put(null, null);
         hashMap.get(null);
+        hashMap.remove(null);
         int a = 0b001000000;
         System.out.println(a);
         a = a - 1;
         System.out.println(Integer.toBinaryString(a));
-        System.out.println(a);
-        System.out.println(0b1111);
     }
 }
