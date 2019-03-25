@@ -1,0 +1,90 @@
+package com.xrhy.base.net;
+
+import com.xrhy.GameServer;
+import com.xrhy.base.ServiceManager;
+import com.xrhy.base.hanlder.AbstractInMessage;
+import com.xrhy.service.DisruptorImpl;
+import com.xrhy.service.SessionImpl;
+import com.xrhy.tool.LogUtil;
+import io.netty.channel.ChannelHandlerContext;
+import io.netty.channel.ChannelPromise;
+import io.netty.channel.SimpleChannelInboundHandler;
+import io.netty.handler.codec.TooLongFrameException;
+
+import java.io.IOException;
+import java.nio.ByteBuffer;
+
+public class SocketServerHandler extends SimpleChannelInboundHandler<byte[]> {
+    @Override
+    public void channelActive(ChannelHandlerContext ctx) throws Exception {
+        super.channelActive(ctx);
+        SessionImpl.addChannel(ctx.channel());
+    }
+
+    @Override
+    public void exceptionCaught(ChannelHandlerContext channelHandlerContext, Throwable throwable) throws Exception {
+        if (throwable instanceof IOException) {
+            /** 客户端断开连接 */
+            logout(channelHandlerContext);
+        } else if (throwable instanceof TooLongFrameException) {
+            /** 过滤消息*/
+        } else {
+            LogUtil.infoLogger.error("exceptionCaught " + throwable.toString());
+        }
+    }
+
+    @Override
+    public void channelInactive(ChannelHandlerContext channelHandlerContext) throws Exception {
+        if (LogUtil.infoLogger.isDebugEnabled()) {
+            LogUtil.infoLogger.debug("channelInactive remoteAddress " + channelHandlerContext.channel().remoteAddress());
+        }
+        SessionImpl.removeChannel(channelHandlerContext.channel());
+        logout(channelHandlerContext);
+    }
+
+    @Override
+    protected void messageReceived(ChannelHandlerContext ctx, byte[] bytes) throws Exception {
+        if (!GameServer.isRunning.get()) {
+            /** 服务器已关闭，不接收消息*/
+            return;
+        }
+
+        ByteBuffer buf = ByteBuffer.allocate(bytes.length);
+        buf.put(bytes);
+        buf.flip();
+        AbstractInMessage iMh = ServiceManager.getInstance().getInMessageHandler(ctx, buf);
+        if (null == iMh) {
+            LogUtil.infoLogger.error("[ messageReceived null == iMh ]: ");
+        } else {
+            if (LogUtil.infoLogger.isDebugEnabled()) {
+                LogUtil.infoLogger.debug("[ receive ]: " + iMh.getClass().getSimpleName());
+            }
+            DisruptorImpl.getInstance().publish(iMh);
+        }
+    }
+
+    @Override
+    public void write(ChannelHandlerContext ctx, Object msg, ChannelPromise promise) throws Exception {
+        super.write(ctx, msg, promise);
+        LogUtil.infoLogger.error("write:" + msg.toString());
+    }
+
+    private void logout(ChannelHandlerContext channelHandlerContext) throws Exception {
+        /**
+         * Logout 消息ID
+         */
+        ByteBuffer buf = ByteBuffer.allocate(12);
+        int length = 8;
+        int mesgId = 0x0407;
+        int cId = 0;
+
+        buf.putInt(length);
+        buf.putInt(mesgId);
+        buf.putInt(cId);
+
+        buf.flip();
+
+        AbstractInMessage iMh = ServiceManager.getInstance().getInMessageHandler(channelHandlerContext, buf);
+        DisruptorImpl.getInstance().publish(iMh);
+    }
+}
